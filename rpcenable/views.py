@@ -1,0 +1,1 @@
+# The only view this module provides is a member of the rpcregistry object in registry.py
