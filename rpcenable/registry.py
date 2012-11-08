@@ -13,7 +13,7 @@ from django.http import HttpResponse
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 
-from rpcenable.models import IncomingRequest
+from rpcenable.models import IncomingRequest, OutgoingRequest
 
 class CustomCGIXMLRPCRequestHandler (CGIXMLRPCRequestHandler):
     """
@@ -95,3 +95,41 @@ class RCPRegistry (object):
 
 # Instantiate the registry
 rpcregistry = RCPRegistry(logging = getattr(settings, 'RPCENABLE_LOG_INCOMING',False))
+
+class XMLRPCPoint (xmlrpclib.ServerProxy):
+    """
+    Thin wrapper over the xmlrpclib.ServerProxy class to allow logged calls
+    to XMLRPC servers.
+    The constructor takes an optional param_hook keyword argument, whichis
+    supposed to be a lamdda function taking call params as a first argument
+    and returning a modified params list.
+    """
+    def __init__ (self, *args, **kwargs):
+        self.__param_hook = kwargs.pop('param_hook',lambda x:x)
+        return xmlrpclib.ServerProxy.__init__(self, *args, **kwargs)
+
+    def __request(self, methodname, params):
+        mod_params = self.__param_hook(params)
+        if not getattr(settings, 'RPCENABLE_LOG_OUTGOING',False):
+            return xmlrpclib.ServerProxy._ServerProxy__request(self, methodname, mod_params)
+        url = getattr(self, '_ServerProxy__host','Unknown') + getattr(self, '_ServerProxy__handler','')
+        outr = OutgoingRequest (method = methodname, params = mod_params, url = url)
+        start = time.time()
+        try:
+            result = xmlrpclib.ServerProxy._ServerProxy__request(self, methodname, mod_params)
+        except Exception, e:
+            outr.exception = str(e)
+            outr.completion_time = time.time()- start
+            outr.save()
+            raise
+        outr.completion_time = time.time()- start
+        outr.save()
+        return result
+
+    def __getattr__(self, name):
+        if not name.startswith('__'):
+            # magic method dispatcher
+            return xmlrpclib._Method(self.__request, name)
+        raise AttributeError("Attribute %r not found" % (name,))
+
+

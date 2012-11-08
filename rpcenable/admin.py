@@ -1,5 +1,5 @@
 from django.contrib import admin
-from rpcenable.models import IncomingRequest, APIUser, ADMIN_USER_ENABLE
+from rpcenable.models import IncomingRequest, OutgoingRequest, APIUser, ADMIN_USER_ENABLE
 from rpcenable.abstractmodels import APIUserAdmin
 
 class IncomingRequestAdmin(admin.ModelAdmin):
@@ -8,6 +8,14 @@ class IncomingRequestAdmin(admin.ModelAdmin):
     list_filter = ('method','prefix',)
     search_fields = ('method','params','exception')
 
+class OutgoingRequestAdmin(admin.ModelAdmin):
+    date_hierarchy = 'created'
+    list_display = ('url','method','params','completion_time','exception','created')
+    list_filter = ('method','url',)
+    search_fields = ('method','params','exception')
+
 admin.site.register (IncomingRequest, IncomingRequestAdmin)
+admin.site.register (OutgoingRequest, OutgoingRequestAdmin)
+
 if ADMIN_USER_ENABLE:
     admin.site.register (APIUser, APIUserAdmin)

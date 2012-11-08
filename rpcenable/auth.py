@@ -14,6 +14,7 @@ from django.utils.importlib import import_module
 from django.conf import settings
 
 from rpcenable.models import APIUser
+from xmlrpclib import Fault
 
 NONCE_MIN_LEN = 16
 # Validity period used for nonce invalidation and timestamp margin
@@ -23,8 +24,15 @@ NONCE_KEY_FORMAT = '_apinonce::%s::%s'
 # Alphabet to choose nonce's random characters from
 NONCE_ALPHABET = string.ascii_letters + string.digits + '-_'
 
+ERR_NONCE_SHORT = 401
+ERR_NONCE_USED = 402
+ERR_BAD_TS = 403
+ERR_USER_MISSING = 404
+ERR_USER_MULTIPLE = 405
+ERR_BAD_SIGNATURE = 406
 
-class AuthError (Exception):
+
+class AuthError (Fault):
     """Indicates failed Authentication"""
     pass
 
@@ -35,7 +43,7 @@ def generate_auth_args (username, secret):
     """
     l = len(NONCE_ALPHABET)
     nonce = ''.join(NONCE_ALPHABET[ord(os.urandom(1)) % l] for i in xrange(NONCE_MIN_LEN))
-    ts = str(int(time.time()))
+    ts = int(time.time())
     return (nonce, ts, username, compute_signature (nonce, ts, username, secret))
 
 def compute_signature (nonce, ts, username, secret):
@@ -55,10 +63,10 @@ def check_nonce_bad (nonce, username):
     been used before. In addition, mark the nonce as used
     """
     if len(nonce) < NONCE_MIN_LEN:
-        raise AuthError ('Nonce is too short (%d < %d)' % (len(nonce), NONCE_MIN_LEN))
+        raise AuthError (ERR_NONCE_SHORT, 'Nonce is too short (%d < %d)' % (len(nonce), NONCE_MIN_LEN))
     used = cache.get(NONCE_KEY_FORMAT % (username, nonce))
     if used:
-        raise AuthError ('Nonce %s is already used' % nonce)
+        raise AuthError (ERR_NONCE_USED,'Nonce %s is already used' % nonce)
     mark_nonce_used (nonce, username)
 
 
@@ -67,7 +75,7 @@ def check_timestamp (ts):
     Check if the provided teimstamp is within the validity margin of the current time.
     """
     if not (str(ts).isdigit() and abs(time.time() - int(ts)) < VALIDITY):
-        raise AuthError ('Provided timestamp is invalid: %s' % ts)
+        raise AuthError (ERR_BAD_TS,'Provided timestamp is invalid: %s' % ts)
 
 def get_user (username):
     """
@@ -76,9 +84,9 @@ def get_user (username):
     try:
         u = APIUser.objects.get (username=username, active = True)
     except APIUser.DoesNotExist:
-        raise AuthError ('Provided username cannot be found: %s' % username)
+        raise AuthError (ERR_USER_MISSING, 'Provided username cannot be found: %s' % username)
     except APIUser.MultipleObjectsReturned:
-        raise AuthError ('Multiple users found with username: %s' % username)
+        raise AuthError (ERR_USER_MULTIPLE, 'Multiple users found with username: %s' % username)
     return u
 
 def authenticate (nonce, ts, username, signature):
@@ -88,7 +96,7 @@ def authenticate (nonce, ts, username, signature):
     user = get_user (username)
     mysig = compute_signature (nonce, ts, username, user.secret)
     if not mysig==signature:
-        raise AuthError ('Signature is invalid: %s!=%s' % (mysig, signature))
+        raise AuthError (ERR_BAD_SIGNATURE, 'Signature is invalid: %s!=%s' % (mysig, signature))
     user.last_login = now()
     user.save()
     return user
