@@ -122,6 +122,7 @@ class XMLRPCPoint (xmlrpclib.ServerProxy):
             outr.completion_time = time.time()- start
             outr.save()
             raise
+        outr.response = result
         outr.completion_time = time.time()- start
         outr.save()
         return result

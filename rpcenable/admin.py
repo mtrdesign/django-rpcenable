@@ -10,9 +10,9 @@ class IncomingRequestAdmin(admin.ModelAdmin):
 
 class OutgoingRequestAdmin(admin.ModelAdmin):
     date_hierarchy = 'created'
-    list_display = ('url','method','params','completion_time','exception','created')
+    list_display = ('url','method','params','response','completion_time','exception','created')
     list_filter = ('method','url',)
-    search_fields = ('method','params','exception')
+    search_fields = ('method','params','exception', 'response')
 
 admin.site.register (IncomingRequest, IncomingRequestAdmin)
 admin.site.register (OutgoingRequest, OutgoingRequestAdmin)
