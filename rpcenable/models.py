@@ -14,7 +14,7 @@ class IncomingRequest (models.Model):
     Log for incoming XMLRPC requests.
     """
     method = models.CharField ('Name', max_length=255)
-    params = models.CharField ('Params', max_length=255)
+    params = models.TextField ('Params', max_length=255)
     prefix = models.CharField ('Prefix', max_length=255, blank=True, default='')
     IP = models.IPAddressField ('IP Address', null = True, blank = True)
     completion_time = models.DecimalField ('Duration', max_digits=5, decimal_places=2)
@@ -35,7 +35,7 @@ class OutgoingRequest (models.Model):
     """
     url = models.URLField('URL')
     method = models.CharField ('Name', max_length=255)
-    params = models.CharField ('Params', max_length=255)
+    params = models.TextField ('Params', max_length=255)
     completion_time = models.DecimalField ('Duration', max_digits=5, decimal_places=2)
     response = models.TextField (blank=True, null = True)
     exception = models.TextField (blank=True, null = True)
