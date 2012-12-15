@@ -22,20 +22,20 @@ Exposing functions via XMLRPC
 To enable XMLRPC exposure of a function of yours, you need to:
  1. Add urls.py entries where you want to expose the XMLRPC functions:
 ```python
-    (r'^rpc/$', rpcregistry.view),
-    (r'^rpc/v(?P<prefix>\d+)/$', rpcregistry.view), # Add this line if you want to enable version prefix
+(r'^rpc/$', rpcregistry.view),
+(r'^rpc/v(?P<prefix>\d+)/$', rpcregistry.view), # Add this line if you want to enable version prefix
 ```
 
  2. Decorate your fuction with the "@rpcregistry.register_rpc" decorator:
 ```python
-    from rpcenable.registry import rpcregistry
+from rpcenable.registry import rpcregistry
 
-    @rpcregistry.register_rpc
-    def echo (var = ''):
-        """
-        Accepts an optional argument, which is appended to the string "Server says: "
-        """
-        return 'Server says: %s' % var
+@rpcregistry.register_rpc
+def echo (var = ''):
+    """
+    Accepts an optional argument, which is appended to the string "Server says: "
+    """
+    return 'Server says: %s' % var
 ```
 
 If you have RPCENABLE_LOG_INCOMING set to True in your settings.py, then you will be able to see a log with all past calls:
@@ -66,30 +66,30 @@ You first need to decide whether you would use the built-in APIUser class, or if
 If it is the latter case, you would not need to make any changes. If you would want to have your own model, then you will need to:
  1. Have that model inherit 'rpcenable.abstractmodels.BaseAPIUser':
 ```python
-    from rpcenable.abstractmodels import BaseAPIUser
+from rpcenable.abstractmodels import BaseAPIUser
 
-    class MyAPIUser(BaseAPIUser):
-        ...
+class MyAPIUser(BaseAPIUser):
+    ...
 ```
  2. Add a ModelAdmin instance for this model to admin.py. If there are no significat (field) changes, you could use the built-in ModelAdmin:
 ```python
-    from rpcenable.abstractmodels import APIUserAdmin
-    admin.site.register (MyAPIUser, APIUserAdmin)
+from rpcenable.abstractmodels import APIUserAdmin
+admin.site.register (MyAPIUser, APIUserAdmin)
 ```
  3. Add the Python Path to your model in settings.py:
 ```python
-    RPCENABLE_USER_MODEL = 'mycustomapp.models.MyAPIUser' # Model to hook up the rpcenable.auth to
+RPCENABLE_USER_MODEL = 'mycustomapp.models.MyAPIUser' # Model to hook up the rpcenable.auth to
 ```
 
 Once this is done, you can use the @rpcauth decorator to add authentication to your XMLRPC-exposed functions. Authenticated functions will automatically receive instance of the APIUser model as a first argument:
 ```python
-    @rpcregistry.register_rpc
-    @rpcauth
-    def auth_echo (user, var = ''):
-        """
-        Returns the + operation of the supplied argument.
-        """
-        return 'User %s says: %s' % (user,var)
+@rpcregistry.register_rpc
+@rpcauth
+def auth_echo (user, var = ''):
+    """
+    Returns the + operation of the supplied argument.
+    """
+    return 'User %s says: %s' % (user,var)
 ```
 
 ![APIUser List](http://picpaste.com/pics/APIUserList-fkLtF9vt.1355584340.png)
@@ -100,16 +100,16 @@ It is often desirable to have an API return a result right away, while having an
 helper decorator that allows you to do just that:
 
 ```python
-    from rpcenable.async import postpone
+from rpcenable.async import postpone
 
-    @postpone
-    def do_heavy_call(some_arg):
-        # do the heavy work here...
+@postpone
+def do_heavy_call(some_arg):
+    # do the heavy work here...
 
-    @rpcregistry.register_rpc
-    def heavy_call (input_arg):
-        my_heavy_call (input_arg)   # This part returns immediately after the jobs is pushed to a separate thread
-        return "Heavy call scheduled."
+@rpcregistry.register_rpc
+def heavy_call (input_arg):
+    my_heavy_call (input_arg)   # This part returns immediately after the jobs is pushed to a separate thread
+    return "Heavy call scheduled."
 ```
 
 If anything goes wrong while doing the heavy work, an email will be sent to the site administrators
@@ -122,24 +122,24 @@ Python comes fully equipped with an XMLRPC library that allows you to make exter
 
 To use the outgoing XMLRPC requests, you will simply need to create an XMLRPC point.
 ```python
-    from rpcenable.registry import XMLRPCPoint
+from rpcenable.registry import XMLRPCPoint
 
-    rpc = XMLRPCPoint('http://url.of.remote.rpc.service/')
-    rpc.echo ('Hi!') # this will call the 'echo' method on the remote service
+rpc = XMLRPCPoint('http://url.of.remote.rpc.service/')
+rpc.echo ('Hi!') # this will call the 'echo' method on the remote service
 ```
 
 To enable seamless authentication, the XMLRPCPoint constructor accepts an optional param_hook function. You could hook them together like this:
 ```python
-    from rpcenable.registry import XMLRPCPoint
-    from rpcenable.auth import generate_auth_args
+from rpcenable.registry import XMLRPCPoint
+from rpcenable.auth import generate_auth_args
 
-    # Param hook function to prepend the authentication arguments to a XMLRPC call
-    param_hook = lambda x: generate_auth_args('MY_APIUSER', 'MY_APIKEY') + x
-    # Shortcut for creating a usabel, authenticated XMLRPCPoint
-    get_rpcpoint = lambda : XMLRPCPoint(conf.DEST_XMLRPC_URL, param_hook=param_hook)
+# Param hook function to prepend the authentication arguments to a XMLRPC call
+param_hook = lambda x: generate_auth_args('MY_APIUSER', 'MY_APIKEY') + x
+# Shortcut for creating a usabel, authenticated XMLRPCPoint
+get_rpcpoint = lambda : XMLRPCPoint(conf.DEST_XMLRPC_URL, param_hook=param_hook)
 
-    authrpc = get_rpcpoint()
-    authrpc.echo ('Hi!') # this will call the 'echo' method on the remote service, with prepended authentication params/signature
+authrpc = get_rpcpoint()
+authrpc.echo ('Hi!') # this will call the 'echo' method on the remote service, with prepended authentication params/signature
 ```
 
 Outgoing calls will only be logged if you have RPCENABLE_LOG_OUTGOING set to True in your settings.py:
@@ -149,8 +149,8 @@ Outgoing calls will only be logged if you have RPCENABLE_LOG_OUTGOING set to Tru
 List of possible settings.py keys
 ================
 ```python
-    # RPCEnable Settings
-    RPCENABLE_USER_MODEL = 'mycustomapp.models.APIUser' # Model to hook up the rpcenable.auth to
-    RPCENABLE_LOG_INCOMING = True   # Whether to log incoming RPC requests to the database
-    RPCENABLE_LOG_OUTGOING = True   # Whether to log Outgoing RPC requests to the database
+# RPCEnable Settings
+RPCENABLE_USER_MODEL = 'mycustomapp.models.APIUser' # Model to hook up the rpcenable.auth to
+RPCENABLE_LOG_INCOMING = True   # Whether to log incoming RPC requests to the database
+RPCENABLE_LOG_OUTGOING = True   # Whether to log Outgoing RPC requests to the database
 ```
