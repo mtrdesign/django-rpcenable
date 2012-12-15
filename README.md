@@ -21,12 +21,14 @@ Exposing functions via XMLRPC
 ===============
 To enable XMLRPC exposure of a function of yours, you need to:
  1. Add urls.py entries where you want to expose the XMLRPC functions:
+
 ```python
 (r'^rpc/$', rpcregistry.view),
 (r'^rpc/v(?P<prefix>\d+)/$', rpcregistry.view) # Add this line if you want to enable version prefix
 ```
 
  2. Decorate your fuction with the "@rpcregistry.register_rpc" decorator:
+
 ```python
     from rpcenable.registry import rpcregistry
 
@@ -65,6 +67,7 @@ You first need to decide whether you would use the built-in APIUser class, or if
 
 If it is the latter case, you would not need to make any changes. If you would want to have your own model, then you will need to:
  1. Have that model inherit 'rpcenable.abstractmodels.BaseAPIUser':
+
 ```python
 from rpcenable.abstractmodels import BaseAPIUser
 
