@@ -41,7 +41,7 @@ def echo (var = ''):
 ```
 
 If you have RPCENABLE_LOG_INCOMING set to True in your settings.py, then you will be able to see a log with all past calls:
-![Incoming Log](http://picpaste.com/pics/IncomingList.1355582482.png)
+![Incoming Log](https://github.com/mtrdesign/django-rpcenable/raw/master/docimages/IncomingList.png)
 
 Built-in authentication - theory
 ================
@@ -95,7 +95,7 @@ def auth_echo (user, var = ''):
     return 'User %s says: %s' % (user,var)
 ```
 
-![APIUser List](http://picpaste.com/pics/APIUserList-fkLtF9vt.1355584340.png)
+![APIUser List](https://github.com/mtrdesign/django-rpcenable/raw/master/docimages/APIUserList.png)
 
 Run functions in the background
 ================
@@ -146,7 +146,7 @@ authrpc.echo ('Hi!') # this will call the 'echo' method on the remote service, w
 ```
 
 Outgoing calls will only be logged if you have RPCENABLE_LOG_OUTGOING set to True in your settings.py:
-![Outgoing calls](http://picpaste.com/pics/OutgoingList-i61kJVxB.1355585832.png)
+![Outgoing calls](https://github.com/mtrdesign/django-rpcenable/raw/master/docimages/OutgoingList.png)
 
 
 List of possible settings.py keys
