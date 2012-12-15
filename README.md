@@ -30,14 +30,14 @@ To enable XMLRPC exposure of a function of yours, you need to:
  2. Decorate your fuction with the "@rpcregistry.register_rpc" decorator:
 
 ```python
-    from rpcenable.registry import rpcregistry
+from rpcenable.registry import rpcregistry
 
-    @rpcregistry.register_rpc
-    def echo (var = ''):
-        """
-        Accepts an optional argument, which is appended to the string "Server says: "
-        """
-        return 'Server says: %s' % var
+@rpcregistry.register_rpc
+def echo (var = ''):
+    """
+    Accepts an optional argument, which is appended to the string "Server says: "
+    """
+    return 'Server says: %s' % var
 ```
 
 If you have RPCENABLE_LOG_INCOMING set to True in your settings.py, then you will be able to see a log with all past calls:
