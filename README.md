@@ -21,13 +21,13 @@ Exposing functions via XMLRPC
 ===============
 To enable XMLRPC exposure of a function of yours, you need to:
  1. Add urls.py entries where you want to expose the XMLRPC functions:
-```
+```python
     (r'^rpc/$', rpcregistry.view),
     (r'^rpc/v(?P<prefix>\d+)/$', rpcregistry.view), # Add this line if you want to enable version prefix
 ```
 
  2. Decorate your fuction with the "@rpcregistry.register_rpc" decorator:
-```
+```python
     from rpcenable.registry import rpcregistry
 
     @rpcregistry.register_rpc
@@ -65,24 +65,24 @@ You first need to decide whether you would use the built-in APIUser class, or if
 
 If it is the latter case, you would not need to make any changes. If you would want to have your own model, then you will need to:
  1. Have that model inherit 'rpcenable.abstractmodels.BaseAPIUser':
-```
+```python
     from rpcenable.abstractmodels import BaseAPIUser
 
     class MyAPIUser(BaseAPIUser):
         ...
 ```
  2. Add a ModelAdmin instance for this model to admin.py. If there are no significat (field) changes, you could use the built-in ModelAdmin:
-```
+```python
     from rpcenable.abstractmodels import APIUserAdmin
     admin.site.register (MyAPIUser, APIUserAdmin)
 ```
  3. Add the Python Path to your model in settings.py:
-```
+```python
     RPCENABLE_USER_MODEL = 'mycustomapp.models.MyAPIUser' # Model to hook up the rpcenable.auth to
 ```
 
 Once this is done, you can use the @rpcauth decorator to add authentication to your XMLRPC-exposed functions. Authenticated functions will automatically receive instance of the APIUser model as a first argument:
-```
+```python
     @rpcregistry.register_rpc
     @rpcauth
     def auth_echo (user, var = ''):
@@ -99,7 +99,7 @@ Run functions in the background
 It is often desirable to have an API return a result right away, while having another thread do the heavy lifting in the background. Django-rpcenable comes with a
 helper decorator that allows you to do just that:
 
-```
+```python
     from rpcenable.async import postpone
 
     @postpone
@@ -121,7 +121,7 @@ Python comes fully equipped with an XMLRPC library that allows you to make exter
  2. Ability to easily use the same authentication scheme that is used for incoming calls
 
 To use the outgoing XMLRPC requests, you will simply need to create an XMLRPC point.
-```
+```python
     from rpcenable.registry import XMLRPCPoint
 
     rpc = XMLRPCPoint('http://url.of.remote.rpc.service/')
@@ -129,7 +129,7 @@ To use the outgoing XMLRPC requests, you will simply need to create an XMLRPC po
 ```
 
 To enable seamless authentication, the XMLRPCPoint constructor accepts an optional param_hook function. You could hook them together like this:
-```
+```python
     from rpcenable.registry import XMLRPCPoint
     from rpcenable.auth import generate_auth_args
 
@@ -148,7 +148,7 @@ Outgoing calls will only be logged if you have RPCENABLE_LOG_OUTGOING set to Tru
 
 List of possible settings.py keys
 ================
-```
+```python
     # RPCEnable Settings
     RPCENABLE_USER_MODEL = 'mycustomapp.models.APIUser' # Model to hook up the rpcenable.auth to
     RPCENABLE_LOG_INCOMING = True   # Whether to log incoming RPC requests to the database
