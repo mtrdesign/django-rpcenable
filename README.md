@@ -139,7 +139,7 @@ from rpcenable.auth import generate_auth_args
 # Param hook function to prepend the authentication arguments to a XMLRPC call
 param_hook = lambda x: generate_auth_args('MY_APIUSER', 'MY_APIKEY') + x
 # Shortcut for creating a usabel, authenticated XMLRPCPoint
-get_rpcpoint = lambda : XMLRPCPoint(conf.DEST_XMLRPC_URL, param_hook=param_hook)
+get_rpcpoint = lambda : XMLRPCPoint('http://url.of.remote.rpc.service/', param_hook=param_hook)
 
 authrpc = get_rpcpoint()
 authrpc.echo ('Hi!') # this will call the 'echo' method on the remote service, with prepended authentication params/signature
