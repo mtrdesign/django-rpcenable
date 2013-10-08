@@ -65,7 +65,7 @@ Built-in authentication - practice
 
 You first need to decide whether you would use the built-in APIUser class, or if you would like to use your own model that would represent the API Users.
 
-If it is the latter case, you would not need to make any changes. If you would want to have your own model, then you will need to:
+In the former case you would not need to make any changes. If you would want to have your own model, then you will need to:
  1. Have that model inherit 'rpcenable.abstractmodels.BaseAPIUser':
 
 ```python
