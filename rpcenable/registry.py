@@ -8,6 +8,7 @@ import time
 import xmlrpclib
 import functools
 import xml.etree.ElementTree as ET
+from decimal import Decimal
 
 from django.http import HttpResponse
 from django.conf import settings
@@ -37,13 +38,13 @@ class CustomCGIXMLRPCRequestHandler (CGIXMLRPCRequestHandler):
             resp = self.handle_django_request(request)
         except Exception, e:
             ir.exception = e
-            ir.completion_time = time.time() - tstart
+            ir.completion_time = Decimal(str(time.time() - tstart)) # compatibility with 2.6, where Decimal can't accept float
             ir.save()
             raise
 
         if '<name>faultString</name>' in resp.content:
             ir.exception = ET.fromstring (resp.content).find(".//string").text or resp.content
-        ir.completion_time = time.time() - tstart
+        ir.completion_time = Decimal(str(time.time() - tstart)) # compatibility with 2.6, where Decimal can't accept float
         ir.save()
         return resp
 
@@ -119,11 +120,11 @@ class XMLRPCPoint (xmlrpclib.ServerProxy):
             result = xmlrpclib.ServerProxy._ServerProxy__request(self, methodname, mod_params)
         except Exception, e:
             outr.exception = str(e)
-            outr.completion_time = time.time()- start
+            outr.completion_time = Decimal(str(time.time() - start)) # compatibility with 2.6, where Decimal can't accept float
             outr.save()
             raise
         outr.response = result
-        outr.completion_time = time.time()- start
+        outr.completion_time = Decimal(str(time.time() - start)) # compatibility with 2.6, where Decimal can't accept float
         outr.save()
         return result
 
