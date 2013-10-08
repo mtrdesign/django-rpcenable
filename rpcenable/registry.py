@@ -73,18 +73,48 @@ class RCPRegistry (object):
         self.logging = logging
 
 
-    def register_rpc (self, f, prefix = ''):
-        # create the prefix on the fly
+    #def register_rpc (self, f, prefix = ''):
+        ## create the prefix on the fly
+        #r = self.reg.get(prefix)
+        #if not r:
+            #self.reg[prefix] = CustomCGIXMLRPCRequestHandler()
+            #self.reg[prefix].register_introspection_functions()
+        ## register the decorated function, and return it with no changes
+        #self.reg[prefix].register_function (f)
+        #@functools.wraps(f)
+        #def wrapper (*args, **kwargs):
+            #return f(*args, **kwds)
+        #return wrapper
+
+    def _add_function (self, function, prefix):
         r = self.reg.get(prefix)
         if not r:
             self.reg[prefix] = CustomCGIXMLRPCRequestHandler()
             self.reg[prefix].register_introspection_functions()
         # register the decorated function, and return it with no changes
-        self.reg[prefix].register_function (f)
-        @functools.wraps(f)
-        def wrapper (*args, **kwargs):
-            return f(*args, **kwds)
-        return wrapper
+        self.reg[prefix].register_function (function)
+
+    def register_rpc (self, *exargs, **exkw):
+        """
+        Decorator with optional arguments, that register a function as an RPC call
+        """
+
+        prefix = exkw.get('prefix','')
+        no_args = len (exargs) == 1 and len(exkw) == 0 and (inspect.isfunction(args[0]))
+
+        def outer (f):
+            if not no_args:
+                self._add_function (f, prefix)
+            @functools.wraps(f)
+            def wrapper (*args, **kwargs):
+                return f(*args, **kwds)
+
+        if no_args:
+            # In this case we only got 1 argument, and it is the decorated function
+            self._add_function (exargs[0])
+            return outer(exargs[0])
+        else:
+            return outer
 
     @csrf_exempt
     def view (self, request, prefix=''):
