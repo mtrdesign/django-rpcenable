@@ -108,6 +108,7 @@ class RCPRegistry (object):
             @functools.wraps(f)
             def wrapper (*args, **kwargs):
                 return f(*args, **kwds)
+            return wrapper
 
         if no_args:
             # In this case we only got 1 argument, and it is the decorated function
