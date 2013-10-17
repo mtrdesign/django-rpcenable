@@ -67,29 +67,18 @@ class RCPRegistry (object):
     """
     Central registry that keeps track of/exposes all rpc-enabled functions
     """
-    def __init__ (self,  logging = True):
-        self.reg = {'': CustomCGIXMLRPCRequestHandler()}
+    def __init__ (self,  logging, allow_none, encoding):
+        self.allow_none = allow_none
+        self.encoding = encoding
+        self.reg = {'': CustomCGIXMLRPCRequestHandler(allow_none=allow_none, encoding=encoding)}
         self.reg[''].register_introspection_functions()
         self.logging = logging
-
-
-    #def register_rpc (self, f, prefix = ''):
-        ## create the prefix on the fly
-        #r = self.reg.get(prefix)
-        #if not r:
-            #self.reg[prefix] = CustomCGIXMLRPCRequestHandler()
-            #self.reg[prefix].register_introspection_functions()
-        ## register the decorated function, and return it with no changes
-        #self.reg[prefix].register_function (f)
-        #@functools.wraps(f)
-        #def wrapper (*args, **kwargs):
-            #return f(*args, **kwds)
-        #return wrapper
 
     def _add_function (self, function, prefix):
         r = self.reg.get(prefix)
         if not r:
-            self.reg[prefix] = CustomCGIXMLRPCRequestHandler()
+            # create the prefix on the fly
+            self.reg[prefix] = CustomCGIXMLRPCRequestHandler(allow_none=self.allow_none, encoding=self.encoding)
             self.reg[prefix].register_introspection_functions()
         # register the decorated function, and return it with no changes
         self.reg[prefix].register_function (function)
@@ -126,7 +115,10 @@ class RCPRegistry (object):
         return self.reg[prefix].handle_django_request(request)
 
 # Instantiate the registry
-rpcregistry = RCPRegistry(logging = getattr(settings, 'RPCENABLE_LOG_INCOMING',False))
+rpcregistry = RCPRegistry(logging = getattr(settings, 'RPCENABLE_LOG_INCOMING',False),
+                          allow_none= getattr(settings, 'RPCENABLE_ALLOW_NONE',True),
+                          encoding = getattr(settings, 'RPCENABLE_ENCODING',None),
+                          )
 
 class XMLRPCPoint (xmlrpclib.ServerProxy):
     """
