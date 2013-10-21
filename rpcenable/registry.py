@@ -8,11 +8,16 @@ import time
 import xmlrpclib
 import functools
 import xml.etree.ElementTree as ET
+import logging
+import json
 from decimal import Decimal
+
 
 from django.http import HttpResponse
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
+from django.core.serializers.json import DateTimeAwareJSONEncoder
+
 
 from rpcenable.models import IncomingRequest, OutgoingRequest
 
@@ -136,8 +141,11 @@ class XMLRPCPoint (xmlrpclib.ServerProxy):
         mod_params = self.__param_hook(params)
         if not getattr(settings, 'RPCENABLE_LOG_OUTGOING',False):
             return xmlrpclib.ServerProxy._ServerProxy__request(self, methodname, mod_params)
+        
         url = getattr(self, '_ServerProxy__host','Unknown') + getattr(self, '_ServerProxy__handler','')
-        outr = OutgoingRequest (method = methodname, params = mod_params, url = url)
+        outr = OutgoingRequest (method = methodname,
+                                params = self._prepare_data_for_log(mod_params),
+                                url = url)
         start = time.time()
         try:
             result = xmlrpclib.ServerProxy._ServerProxy__request(self, methodname, mod_params)
@@ -146,7 +154,7 @@ class XMLRPCPoint (xmlrpclib.ServerProxy):
             outr.completion_time = Decimal(str(time.time() - start)) # compatibility with 2.6, where Decimal can't accept float
             outr.save()
             raise
-        outr.response = result
+        outr.response = self._prepare_data_for_log(result)
         outr.completion_time = Decimal(str(time.time() - start)) # compatibility with 2.6, where Decimal can't accept float
         outr.save()
         return result
@@ -156,5 +164,17 @@ class XMLRPCPoint (xmlrpclib.ServerProxy):
             # magic method dispatcher
             return xmlrpclib._Method(self.__request, name)
         raise AttributeError("Attribute %r not found" % (name,))
+        
+    
+    def _prepare_data_for_log(self, data):
+        try:            
+            result = json.dumps(data, ensure_ascii=False, cls=DateTimeAwareJSONEncoder)
+        except:
+            L = logging.getLogger(name='rpcenable')
+            L.warning("Unable to JSON encode data for logging. Falling back to repr.", 
+                      exc_info=True)
+            result = repr(data)
+            
+        return result
 
 
