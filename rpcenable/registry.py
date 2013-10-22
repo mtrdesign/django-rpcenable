@@ -101,7 +101,7 @@ class RCPRegistry (object):
                 self._add_function (f, prefix)
             @functools.wraps(f)
             def wrapper (*args, **kwargs):
-                return f(*args, **kwds)
+                return f(*args, **kwargs)
             return wrapper
 
         if no_args:
