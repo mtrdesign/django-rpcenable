@@ -10,6 +10,7 @@ import functools
 import xml.etree.ElementTree as ET
 import logging
 import json
+import sys, traceback
 from decimal import Decimal
 
 
@@ -20,6 +21,8 @@ from django.core.serializers.json import DateTimeAwareJSONEncoder
 
 
 from rpcenable.models import IncomingRequest, OutgoingRequest
+
+LOG = logging.getLevelName(__name__)
 
 class CustomCGIXMLRPCRequestHandler (CGIXMLRPCRequestHandler):
     """
@@ -42,7 +45,9 @@ class CustomCGIXMLRPCRequestHandler (CGIXMLRPCRequestHandler):
         try:
             resp = self.handle_django_request(request)
         except Exception, e:
-            ir.exception = e
+            LOG.exception (u'Exception in incoming XMLRPC call: %s' % e)
+            lines = traceback.format_exception(*sys.exc_info())
+            ir.exception = ''.join(lines)
             ir.completion_time = Decimal(str(time.time() - tstart)) # compatibility with 2.6, where Decimal can't accept float
             ir.save()
             raise
@@ -141,7 +146,7 @@ class XMLRPCPoint (xmlrpclib.ServerProxy):
         mod_params = self.__param_hook(params)
         if not getattr(settings, 'RPCENABLE_LOG_OUTGOING',False):
             return xmlrpclib.ServerProxy._ServerProxy__request(self, methodname, mod_params)
-        
+
         url = getattr(self, '_ServerProxy__host','Unknown') + getattr(self, '_ServerProxy__handler','')
         outr = OutgoingRequest (method = methodname,
                                 params = self._prepare_data_for_log(mod_params),
@@ -150,7 +155,9 @@ class XMLRPCPoint (xmlrpclib.ServerProxy):
         try:
             result = xmlrpclib.ServerProxy._ServerProxy__request(self, methodname, mod_params)
         except Exception, e:
-            outr.exception = str(e)
+            LOG.exception (u'Exception in external XMLRPC call: %s' % e)
+            lines = traceback.format_exception(*sys.exc_info())
+            outr.exception = ''.join(lines)
             outr.completion_time = Decimal(str(time.time() - start)) # compatibility with 2.6, where Decimal can't accept float
             outr.save()
             raise
@@ -164,17 +171,17 @@ class XMLRPCPoint (xmlrpclib.ServerProxy):
             # magic method dispatcher
             return xmlrpclib._Method(self.__request, name)
         raise AttributeError("Attribute %r not found" % (name,))
-        
-    
+
+
     def _prepare_data_for_log(self, data):
-        try:            
+        try:
             result = json.dumps(data, ensure_ascii=False, cls=DateTimeAwareJSONEncoder)
         except:
             L = logging.getLogger(name='rpcenable')
-            L.warning("Unable to JSON encode data for logging. Falling back to repr.", 
+            L.warning("Unable to JSON encode data for logging. Falling back to repr.",
                       exc_info=True)
             result = repr(data)
-            
+
         return result
 
 
