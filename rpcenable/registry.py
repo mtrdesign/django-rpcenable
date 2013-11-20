@@ -22,7 +22,7 @@ from django.core.serializers.json import DateTimeAwareJSONEncoder
 
 from rpcenable.models import IncomingRequest, OutgoingRequest
 
-LOG = logging.getLevelName(__name__)
+LOG = logging.getLogger(__name__)
 
 class CustomCGIXMLRPCRequestHandler (CGIXMLRPCRequestHandler):
     """
@@ -36,25 +36,17 @@ class CustomCGIXMLRPCRequestHandler (CGIXMLRPCRequestHandler):
         as a new IncomingRequest instance. It will add processing overhead so it might be
         unsuitable when going for max performance.
         """
-        tstart = time.time()
+        # temporarily save the initial time in that var
+        start = time.time()
+        # prepare log record
         ir = IncomingRequest()
-        # Django changed the location of the request contents at some point
-        ir.params, ir.method = xmlrpclib.loads(getattr(request,'body',None) or (request,'raw_post_data'))
         ir.prefix = prefix
         ir.IP = request.META.get('REMOTE_ADDR')
-        try:
-            resp = self.handle_django_request(request)
-        except Exception, e:
-            LOG.exception (u'Exception in incoming XMLRPC call: %s' % e)
-            lines = traceback.format_exception(*sys.exc_info())
-            ir.exception = ''.join(lines)
-            ir.completion_time = Decimal(str(time.time() - tstart)) # compatibility with 2.6, where Decimal can't accept float
-            ir.save()
-            raise
 
-        if '<name>faultString</name>' in resp.content:
-            ir.exception = ET.fromstring (resp.content).find(".//string").text or resp.content
-        ir.completion_time = Decimal(str(time.time() - tstart)) # compatibility with 2.6, where Decimal can't accept float
+        resp = self._marshaled_dispatch(request, ir=ir, startts=start)
+
+        # save log record
+        ir.completion_time = Decimal(str(time.time() - start)) # compatibility with 2.6, where Decimal can't accept float
         ir.save()
         return resp
 
@@ -63,15 +55,73 @@ class CustomCGIXMLRPCRequestHandler (CGIXMLRPCRequestHandler):
         """
         Passes the request body to the CGIXMLRPCRequestHandler dispatcher
         """
-        if not request.method=='POST':
-            return HttpResponse ('This method is only available via POST.', status = 400)
-        r_text = self._marshaled_dispatch(getattr(request,'body',None) or (request,'raw_post_data'))
-        return HttpResponse(r_text, mimetype='text/xml')
+        response = self._marshaled_dispatch(request)
+        return response
 
     def system_methodSignature(self, method_name):
         """Must be overridden to provide signatures"""
         if method_name in self.funcs:
             return str(inspect.getargspec (self.funcs[method_name]))
+
+
+    def _marshaled_dispatch(self, request, dispatch_method = None, path = None, ir = None, startts=None):
+        """Dispatches an XML-RPC method from marshalled (XML) data.
+
+        XML-RPC methods are dispatched from the marshalled (XML) data
+        using the _dispatch method and the result is returned as
+        marshalled data. For backwards compatibility, a dispatch
+        function can be provided as an argument (see comment in
+        SimpleXMLRPCRequestHandler.do_POST) but overriding the
+        existing method through subclassing is the preferred means
+        of changing method dispatch behavior.
+
+        Copy of the original function with additional logging
+        and use of Django's request/resposnses
+        """
+
+        if not request.method=='POST':
+            return HttpResponse ('This method is only available via POST.', status = 400)
+
+        # Django changed the location of the request contents at some point
+        data = getattr(request,'body',None) or (request,'raw_post_data')
+
+        try:
+            params, method = xmlrpclib.loads(data)
+            if ir:
+                # record the params/method here, in order to avoid multiple calls to loads
+                ir.params, ir.method = params, method
+
+            # generate response
+            if dispatch_method is not None:
+                response = dispatch_method(method, params)
+            else:
+                response = self._dispatch(method, params)
+            # wrap response in a singleton tuple
+            response = (response,)
+            response = xmlrpclib.dumps(response, methodresponse=1,
+                                       allow_none=self.allow_none, encoding=self.encoding)
+        except xmlrpclib.Fault, fault:
+            response = xmlrpclib.dumps(fault, allow_none=self.allow_none,
+                                       encoding=self.encoding)
+        except Exception, e:
+            # report exception back to server
+            if ir:
+                exc_type, exc_value, exc_tb = sys.exc_info()
+                LOG.exception (u'Exception in incoming XMLRPC call: %s' % e)
+                if startts:
+                    ir.completion_time = Decimal(str(time.time() - startts))
+                else:
+                    ir.completion_time = 0
+                lines = traceback.format_exception(exc_type, exc_value, exc_tb)
+                ir.exception = ''.join(lines)
+                ir.save()
+            response = xmlrpclib.dumps(
+                xmlrpclib.Fault(1, "%s:%s" % (exc_type, exc_value)),
+                encoding=self.encoding, allow_none=self.allow_none,
+                )
+
+        return HttpResponse(response, mimetype='text/xml')
+
 
 class RCPRegistry (object):
     """
