@@ -8,13 +8,21 @@ import time
 import xmlrpclib
 import functools
 import xml.etree.ElementTree as ET
+import logging
+import json
+import sys, traceback
 from decimal import Decimal
+
 
 from django.http import HttpResponse
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
+from django.core.serializers.json import DateTimeAwareJSONEncoder
+
 
 from rpcenable.models import IncomingRequest, OutgoingRequest
+
+LOG = logging.getLogger(__name__)
 
 class CustomCGIXMLRPCRequestHandler (CGIXMLRPCRequestHandler):
     """
@@ -28,23 +36,17 @@ class CustomCGIXMLRPCRequestHandler (CGIXMLRPCRequestHandler):
         as a new IncomingRequest instance. It will add processing overhead so it might be
         unsuitable when going for max performance.
         """
-        tstart = time.time()
+        # temporarily save the initial time in that var
+        start = time.time()
+        # prepare log record
         ir = IncomingRequest()
-        # Django changed the location of the request contents at some point
-        ir.params, ir.method = xmlrpclib.loads(getattr(request,'body',None) or (request,'raw_post_data'))
         ir.prefix = prefix
         ir.IP = request.META.get('REMOTE_ADDR')
-        try:
-            resp = self.handle_django_request(request)
-        except Exception, e:
-            ir.exception = e
-            ir.completion_time = Decimal(str(time.time() - tstart)) # compatibility with 2.6, where Decimal can't accept float
-            ir.save()
-            raise
 
-        if '<name>faultString</name>' in resp.content:
-            ir.exception = ET.fromstring (resp.content).find(".//string").text or resp.content
-        ir.completion_time = Decimal(str(time.time() - tstart)) # compatibility with 2.6, where Decimal can't accept float
+        resp = self._marshaled_dispatch(request, ir=ir, startts=start)
+
+        # save log record
+        ir.completion_time = Decimal(str(time.time() - start)) # compatibility with 2.6, where Decimal can't accept float
         ir.save()
         return resp
 
@@ -53,38 +55,116 @@ class CustomCGIXMLRPCRequestHandler (CGIXMLRPCRequestHandler):
         """
         Passes the request body to the CGIXMLRPCRequestHandler dispatcher
         """
-        if not request.method=='POST':
-            return HttpResponse ('This method is only available via POST.', status = 400)
-        r_text = self._marshaled_dispatch(getattr(request,'body',None) or (request,'raw_post_data'))
-        return HttpResponse(r_text, mimetype='text/xml')
+        response = self._marshaled_dispatch(request)
+        return response
 
     def system_methodSignature(self, method_name):
         """Must be overridden to provide signatures"""
         if method_name in self.funcs:
             return str(inspect.getargspec (self.funcs[method_name]))
 
+
+    def _marshaled_dispatch(self, request, dispatch_method = None, path = None, ir = None, startts=None):
+        """Dispatches an XML-RPC method from marshalled (XML) data.
+
+        XML-RPC methods are dispatched from the marshalled (XML) data
+        using the _dispatch method and the result is returned as
+        marshalled data. For backwards compatibility, a dispatch
+        function can be provided as an argument (see comment in
+        SimpleXMLRPCRequestHandler.do_POST) but overriding the
+        existing method through subclassing is the preferred means
+        of changing method dispatch behavior.
+
+        Copy of the original function with additional logging
+        and use of Django's request/resposnses
+        """
+
+        if not request.method=='POST':
+            return HttpResponse ('This method is only available via POST.', status = 400)
+
+        # Django changed the location of the request contents at some point
+        data = getattr(request,'body',None) or (request,'raw_post_data')
+
+        try:
+            params, method = xmlrpclib.loads(data)
+            if ir:
+                # record the params/method here, in order to avoid multiple calls to loads
+                ir.params, ir.method = params, method
+
+            # generate response
+            if dispatch_method is not None:
+                response = dispatch_method(method, params)
+            else:
+                response = self._dispatch(method, params)
+            # wrap response in a singleton tuple
+            response = (response,)
+            response = xmlrpclib.dumps(response, methodresponse=1,
+                                       allow_none=self.allow_none, encoding=self.encoding)
+        except xmlrpclib.Fault, fault:
+            response = xmlrpclib.dumps(fault, allow_none=self.allow_none,
+                                       encoding=self.encoding)
+        except Exception, e:
+            # report exception back to server
+            if ir:
+                exc_type, exc_value, exc_tb = sys.exc_info()
+                LOG.exception (u'Exception in incoming XMLRPC call: %s' % e)
+                if startts:
+                    ir.completion_time = Decimal(str(time.time() - startts))
+                else:
+                    ir.completion_time = 0
+                lines = traceback.format_exception(exc_type, exc_value, exc_tb)
+                ir.exception = ''.join(lines)
+                ir.save()
+            response = xmlrpclib.dumps(
+                xmlrpclib.Fault(1, "%s:%s" % (exc_type, exc_value)),
+                encoding=self.encoding, allow_none=self.allow_none,
+                )
+
+        return HttpResponse(response, mimetype='text/xml')
+
+
 class RCPRegistry (object):
     """
     Central registry that keeps track of/exposes all rpc-enabled functions
     """
-    def __init__ (self,  logging = True):
-        self.reg = {'': CustomCGIXMLRPCRequestHandler()}
+    def __init__ (self,  logging, allow_none, encoding):
+        self.allow_none = allow_none
+        self.encoding = encoding
+        self.reg = {'': CustomCGIXMLRPCRequestHandler(allow_none=allow_none, encoding=encoding)}
         self.reg[''].register_introspection_functions()
         self.logging = logging
 
-
-    def register_rpc (self, f, prefix = ''):
-        # create the prefix on the fly
+    def _add_function (self, function, prefix):
         r = self.reg.get(prefix)
         if not r:
-            self.reg[prefix] = CustomCGIXMLRPCRequestHandler()
+            # create the prefix on the fly
+            self.reg[prefix] = CustomCGIXMLRPCRequestHandler(allow_none=self.allow_none, encoding=self.encoding)
             self.reg[prefix].register_introspection_functions()
         # register the decorated function, and return it with no changes
-        self.reg[prefix].register_function (f)
-        @functools.wraps(f)
-        def wrapper (*args, **kwargs):
-            return f(*args, **kwds)
-        return wrapper
+        self.reg[prefix].register_function (function)
+
+    def register_rpc (self, *exargs, **exkw):
+        """
+        Decorator with optional arguments, that register a function as an RPC call
+        """
+
+        prefix = exkw.get('prefix','')
+        no_args = len (exargs) == 1 and len(exkw) == 0 and (inspect.isfunction(args[0]))
+
+        def outer (f):
+            if not no_args:
+                self._add_function (f, prefix)
+            @functools.wraps(f)
+            def wrapper (*args, **kwargs):
+                return f(*args, **kwargs)
+            return wrapper
+
+        if no_args:
+            # In this case we only got 1 argument, and it is the decorated function
+            self._add_function (exargs[0])
+            return outer(exargs[0])
+        else:
+            return outer
 
     @csrf_exempt
     def view (self, request, prefix=''):
@@ -95,7 +175,10 @@ class RCPRegistry (object):
         return self.reg[prefix].handle_django_request(request)
 
 # Instantiate the registry
-rpcregistry = RCPRegistry(logging = getattr(settings, 'RPCENABLE_LOG_INCOMING',False))
+rpcregistry = RCPRegistry(logging = getattr(settings, 'RPCENABLE_LOG_INCOMING',False),
+                          allow_none= getattr(settings, 'RPCENABLE_ALLOW_NONE',True),
+                          encoding = getattr(settings, 'RPCENABLE_ENCODING',None),
+                          )
 
 class XMLRPCPoint (xmlrpclib.ServerProxy):
     """
@@ -113,17 +196,22 @@ class XMLRPCPoint (xmlrpclib.ServerProxy):
         mod_params = self.__param_hook(params)
         if not getattr(settings, 'RPCENABLE_LOG_OUTGOING',False):
             return xmlrpclib.ServerProxy._ServerProxy__request(self, methodname, mod_params)
+
         url = getattr(self, '_ServerProxy__host','Unknown') + getattr(self, '_ServerProxy__handler','')
-        outr = OutgoingRequest (method = methodname, params = mod_params, url = url)
+        outr = OutgoingRequest (method = methodname,
+                                params = self._prepare_data_for_log(mod_params),
+                                url = url)
         start = time.time()
         try:
             result = xmlrpclib.ServerProxy._ServerProxy__request(self, methodname, mod_params)
         except Exception, e:
-            outr.exception = str(e)
+            LOG.exception (u'Exception in external XMLRPC call: %s' % e)
+            lines = traceback.format_exception(*sys.exc_info())
+            outr.exception = ''.join(lines)
             outr.completion_time = Decimal(str(time.time() - start)) # compatibility with 2.6, where Decimal can't accept float
             outr.save()
             raise
-        outr.response = result
+        outr.response = self._prepare_data_for_log(result)
         outr.completion_time = Decimal(str(time.time() - start)) # compatibility with 2.6, where Decimal can't accept float
         outr.save()
         return result
@@ -133,5 +221,17 @@ class XMLRPCPoint (xmlrpclib.ServerProxy):
             # magic method dispatcher
             return xmlrpclib._Method(self.__request, name)
         raise AttributeError("Attribute %r not found" % (name,))
+
+
+    def _prepare_data_for_log(self, data):
+        try:
+            result = json.dumps(data, ensure_ascii=False, cls=DateTimeAwareJSONEncoder)
+        except:
+            L = logging.getLogger(name='rpcenable')
+            L.warning("Unable to JSON encode data for logging. Falling back to repr.",
+                      exc_info=True)
+            result = repr(data)
+
+        return result
 
 
