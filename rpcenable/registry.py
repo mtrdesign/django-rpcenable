@@ -105,8 +105,8 @@ class CustomCGIXMLRPCRequestHandler (CGIXMLRPCRequestHandler):
                                        encoding=self.encoding)
         except Exception, e:
             # report exception back to server
+            exc_type, exc_value, exc_tb = sys.exc_info()
             if ir:
-                exc_type, exc_value, exc_tb = sys.exc_info()
                 LOG.exception (u'Exception in incoming XMLRPC call: %s' % e)
                 if startts:
                     ir.completion_time = Decimal(str(time.time() - startts))
