@@ -123,8 +123,13 @@ def rpcauth (fn=None, user_model=None, user_filter=None):
         return decorator
     return wrapper
 
+def noauth(f):
+    """
+    Decorator that strips the arguments (nonce, ts, username, signature) and replaces them
+    with None instead of a User instance; for RPC methods that do not require authentication.
+    """
     @functools.wraps(f)
-    def wrapper (nonce, ts, username, signature, *args, **kwargs):
-        user = authenticate (nonce, ts, username, signature)
-        return f(user, *args, **kwargs)
+    def wrapper(nonce, ts, username, signature, *args, **kwargs):
+        return f(None, *args, **kwargs)
     return wrapper
+
