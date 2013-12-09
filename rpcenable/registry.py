@@ -123,7 +123,7 @@ class CustomCGIXMLRPCRequestHandler (CGIXMLRPCRequestHandler):
         return HttpResponse(response, mimetype='text/xml')
 
 
-class RCPRegistry (object):
+class RPCRegistry (object):
     """
     Central registry that keeps track of/exposes all rpc-enabled functions
     """
@@ -175,7 +175,7 @@ class RCPRegistry (object):
         return self.reg[prefix].handle_django_request(request)
 
 # Instantiate the registry
-rpcregistry = RCPRegistry(logging = getattr(settings, 'RPCENABLE_LOG_INCOMING',False),
+rpcregistry = RPCRegistry(logging = getattr(settings, 'RPCENABLE_LOG_INCOMING',False),
                           allow_none= getattr(settings, 'RPCENABLE_ALLOW_NONE',True),
                           encoding = getattr(settings, 'RPCENABLE_ENCODING',None),
                           )
