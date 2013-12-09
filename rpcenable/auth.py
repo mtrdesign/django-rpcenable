@@ -14,6 +14,7 @@ from django.utils.importlib import import_module
 from django.conf import settings
 
 from rpcenable.models import APIUser
+from rpcenable.registry import XMLRPCPoint
 from xmlrpclib import Fault
 
 NONCE_MIN_LEN = 16
@@ -133,3 +134,15 @@ def noauth(f):
         return f(None, *args, **kwargs)
     return wrapper
 
+class AuthXMLRPCPoint(XMLRPCPoint):
+    """
+    XMLRPC endpoint for outgoing authenticated calls,
+
+    Automatically prepends the authentication arguments returned by
+    `generate_auth_args(user, secret)` to the list of XMLRPC
+    """
+    def __init__ (self, user, secret, *args, **kwargs):
+        # pass down a function that prepends auth arguments to the regulart API Call args
+        kwargs['param_hook'] = lambda x: generate_auth_args(user, secret) + x
+        kwargs['allow_none'] = True
+        return XMLRPCPoint.__init__(self, *args, **kwargs)   # old-style inheritance
