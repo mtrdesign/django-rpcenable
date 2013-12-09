@@ -149,19 +149,13 @@ class RPCRegistry (object):
         """
 
         prefix = exkw.get('prefix','')
-        no_args = len (exargs) == 1 and len(exkw) == 0 and (inspect.isfunction(args[0]))
 
         def outer (f):
-            if not no_args:
-                self._add_function (f, prefix)
-            @functools.wraps(f)
-            def wrapper (*args, **kwargs):
-                return f(*args, **kwargs)
-            return wrapper
+            self._add_function (f, prefix, name=name)
+            return f
 
-        if no_args:
+        if len (exargs) == 1 and len(exkw) == 0 and (inspect.isfunction(args[0])):
             # In this case we only got 1 argument, and it is the decorated function
-            self._add_function (exargs[0])
             return outer(exargs[0])
         else:
             return outer
