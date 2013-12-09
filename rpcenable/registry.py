@@ -134,21 +134,22 @@ class RPCRegistry (object):
         self.reg[''].register_introspection_functions()
         self.logging = logging
 
-    def _add_function (self, function, prefix):
+    def _add_function (self, function, prefix, name=None):
         r = self.reg.get(prefix)
         if not r:
             # create the prefix on the fly
             self.reg[prefix] = CustomCGIXMLRPCRequestHandler(allow_none=self.allow_none, encoding=self.encoding)
             self.reg[prefix].register_introspection_functions()
         # register the decorated function, and return it with no changes
-        self.reg[prefix].register_function (function)
+        self.reg[prefix].register_function(function, name)
 
     def register_rpc (self, *exargs, **exkw):
         """
         Decorator with optional arguments, that register a function as an RPC call
         """
 
-        prefix = exkw.get('prefix','')
+        prefix = exkw.get('prefix', '')
+        name = exkw.get('name', None)
 
         def outer (f):
             self._add_function (f, prefix, name=name)
