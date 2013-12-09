@@ -77,23 +77,27 @@ def check_timestamp (ts):
     if not (str(ts).isdigit() and abs(time.time() - int(ts)) < VALIDITY):
         raise AuthError (ERR_BAD_TS,'Provided timestamp is invalid: %s' % ts)
 
-def get_user (username):
+def get_user (username, user_model=None, user_filter=None):
     """
     Retrieves a user object corresponding to the given username
     """
+    user_model = user_model or APIUser
+    qs = user_model.objects.all()
+    if user_filter:
+        qs = qs.filter(**user_filter)
     try:
-        u = APIUser.objects.get (username=username, active = True)
-    except APIUser.DoesNotExist:
+        u = qs.get(username=username, active=True)
+    except user_model.DoesNotExist:
         raise AuthError (ERR_USER_MISSING, 'Provided username cannot be found: %s' % username)
-    except APIUser.MultipleObjectsReturned:
+    except user_model.MultipleObjectsReturned:
         raise AuthError (ERR_USER_MULTIPLE, 'Multiple users found with username: %s' % username)
     return u
 
-def authenticate (nonce, ts, username, signature):
+def authenticate (nonce, ts, username, signature, user_model=None, user_filter=None):
     """Checks all of the requisites for a successful auth"""
     check_nonce_bad (nonce, username)
     check_timestamp (ts)
-    user = get_user (username)
+    user = get_user (username, user_model=user_model, user_filter=user_filter)
     mysig = compute_signature (nonce, ts, username, user.secret)
     if not mysig==signature:
         raise AuthError (ERR_BAD_SIGNATURE, 'Signature is invalid: %s!=%s' % (mysig, signature))
@@ -101,12 +105,24 @@ def authenticate (nonce, ts, username, signature):
     user.save()
     return user
 
-def rpcauth (f):
+def rpcauth (fn=None, user_model=None, user_filter=None):
     """
     Decorator that strips the arguments (nonce, ts, username, signature) and replaces them
     with the hooked-up User instance as a first arg upon successful authentication.
     The decorated function MUST accept the user instance as a first argument.
     """
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(nonce, ts, username, signature, *args, **kwargs):
+            user = authenticate(nonce, ts, username, signature, user_model=user_model, user_filter=user_filter)
+            return fn(user, *args, **kwargs)
+        return wrapper
+    if fn:
+        return decorator(fn)
+    else:
+        return decorator
+    return wrapper
+
     @functools.wraps(f)
     def wrapper (nonce, ts, username, signature, *args, **kwargs):
         user = authenticate (nonce, ts, username, signature)
